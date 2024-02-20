@@ -21,6 +21,10 @@ char* pbEncode(const char *plaintext, table_t* table) {
 
     for(int i = 0; i < len; i++) {
         char c = plaintext[i];
+        if(c == ' '){
+            strcat(strBuffer, " ");
+            continue;
+        }
         c = capitalize(c);
         int* coord = searchTable(table, c);
         if(coord){
@@ -38,15 +42,17 @@ char* pbEncode(const char *plaintext, table_t* table) {
 
 char* pbDecode(const char *ciphertext, table_t* table) {
     int len = strlen(ciphertext);
-    if(len % 2 != 0) {
-        printf("Invalid cipher text.\n");
-        return NULL;
-    }
 
     char* strBuffer = (char*)malloc((len / 2) * sizeof(char) + 1);
 
     int cnt = 0;
     for(int i = 0; i < len;) {
+        if(ciphertext[i] == ' '){
+            strBuffer[cnt++] = ' ';
+            i++;
+            continue;
+        }
+        
         int row = ciphertext[i++]-'0';
         int col = ciphertext[i++]-'0';
 

@@ -6,6 +6,8 @@
 
 #include <stdlib.h>
 
+#define SENTENCE_BUFFER_SIZE 1024
+
 /**
  * table structure
  * char** square: 2d array of char

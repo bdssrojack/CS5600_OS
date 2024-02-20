@@ -43,6 +43,12 @@ process_t* createProcess(int id, char* name, long rt, int pr){
     return p;
 }
 
+void freeProcess(process_t* p){
+    printf("Freeing a process\n");
+    free(p->name);
+    free(p);
+}
+
 queue_t* createQ(){
     printf("Creating a queue\n");
     queue_t* queue = (queue_t*)malloc(sizeof(queue_t));
@@ -120,7 +126,6 @@ void* popQ(queue_t* queue){
     void* data = node->data;
     queue->head->next = node->next;
     node->next->prev = queue->head;
-    deleteNode(node);
 
     queue->size--;
 
@@ -148,7 +153,6 @@ process_t* rmProcess(queue_t* queue){
     process_t* data = (process_t*)max->data;
     max->prev->next = max->next;
     max->next->prev = max->prev;
-    deleteNode(max);
 
     queue->size--;
 

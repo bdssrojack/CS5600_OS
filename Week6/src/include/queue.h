@@ -110,4 +110,11 @@ void printQ(queue_t* queue);
  */
 process_t* createProcess(int id, char* name, long rt, int pr);
 
+/**
+ * @brief Delete a Process object
+ * 
+ * @param p 
+ */
+void freeProcess(process_t* p);
+
 #endif
