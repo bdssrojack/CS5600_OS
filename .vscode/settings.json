@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "stdbool.h": "c",
+        "func.h": "c",
+        "alloc-mem-lastname.C": "cpp",
+        "polybius.h": "c",
+        "table.h": "c",
+        "queue.h": "c",
+        "unistd.h": "c",
+        "genword.h": "c"
+    }
+}
