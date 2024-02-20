@@ -6,9 +6,10 @@
  * @param data 
  * @return node_t* 
  */
-static node_t* createNode(void* data){
+static node_t* createNode(void* data, data_type type){
     node_t* node = (node_t*)malloc(sizeof(node_t));
 
+    node->type = type;
     node->data = data;
     node->next = NULL;
     node->prev = NULL;
@@ -22,6 +23,10 @@ static node_t* createNode(void* data){
  * @param node 
  */
 static void deleteNode(node_t* node){
+    if(node->type == DATA_TYPE_PROCESS){
+        process_t* p = (process_t*)node->data;
+        free(p->name);
+    }
     free(node->data);
     free(node);
 }
@@ -94,7 +99,8 @@ void printQ(queue_t* queue){
 
 void add2q(queue_t* queue, void* element){
     printf("Adding to queue\n");
-    node_t* node = createNode(element);
+    // TODO: specify the data type by parameter
+    node_t* node = createNode(element, DATA_TYPE_PROCESS);
 
     node->next = queue->tail;
     node->prev = queue->tail->prev;

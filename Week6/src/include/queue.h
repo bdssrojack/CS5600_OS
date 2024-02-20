@@ -5,6 +5,15 @@
 #include <stdio.h>
 
 /**
+ * @brief 
+ * 
+ */
+typedef enum {
+    DATA_TYPE_PROCESS,
+    DATA_TYPE_OTHER,
+} data_type;
+
+/**
  * @brief a structure that contains the process id, name, runtime and priority.
  * 
  */
@@ -20,6 +29,7 @@ typedef struct process{
  * 
  */
 typedef struct node{
+    data_type type;
     void* data;
     struct node* next;
     struct node* prev;

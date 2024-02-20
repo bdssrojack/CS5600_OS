@@ -38,12 +38,12 @@ int main(int argc, char* argv[]){
 
     int cnt = 0;
     while(!feof(readFile)){
-        char word[MAXLEN + 1];
+        char* word = (char*)malloc(MAXLEN + 1);
         fscanf(readFile, "%s", word);
-        printf("Reading: %s\n", word);
+        if(strcmp(word, "")==0)
+            continue;
         process_t* p = createProcess(cnt++, word, 0, 0);
         add2q(queue, p);
-        // free(word);
     }
     printQ(queue);
 
