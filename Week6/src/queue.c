@@ -32,7 +32,7 @@ static void deleteNode(node_t* node){
 }
 
 process_t* createProcess(int id, char* name, long rt, int pr){
-    printf("Creating a process\n");
+    // printf("Creating a process\n");
     process_t* p = (process_t*)malloc(sizeof(process_t));
 
     p->id = id;
@@ -44,7 +44,7 @@ process_t* createProcess(int id, char* name, long rt, int pr){
 }
 
 void freeProcess(process_t* p){
-    printf("Freeing a process\n");
+    // printf("Freeing a process\n");
     free(p->name);
     free(p);
 }
@@ -104,7 +104,7 @@ void printQ(queue_t* queue){
 }
 
 void add2q(queue_t* queue, void* element){
-    printf("Adding to queue\n");
+    // printf("Adding to queue\n");
     // TODO: specify the data type by parameter
     node_t* node = createNode(element, DATA_TYPE_PROCESS);
 
@@ -117,7 +117,7 @@ void add2q(queue_t* queue, void* element){
 }
 
 void* popQ(queue_t* queue){
-    printf("Popping from queue\n");
+    // printf("Popping from queue\n");
     if(queue->size == 0){
         return NULL;
     }

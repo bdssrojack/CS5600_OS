@@ -1,3 +1,7 @@
+#ifndef TEST
+#define TEST 0
+#endif
+
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -13,7 +17,7 @@ void writeCipherToFile(const char *sentence, table_t *table) {
   char fileName[256];
   time_t now = time(NULL);
   struct tm *tm = localtime(&now);
-  strftime(fileName, sizeof(fileName), "cipher_%Y%m%d%H%M%S.txt", tm);
+  strftime(fileName, sizeof(fileName), "cipher_%Y%m%d%H%M.txt", tm);
   printf("Writing to %s\n", fileName);
 
   mkdir("output", 0755);
@@ -22,7 +26,7 @@ void writeCipherToFile(const char *sentence, table_t *table) {
   snprintf(filePath, sizeof(filePath), "output/%s", fileName);
 
   // Open the file for writing
-  int fd = open(filePath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  int fd = open(filePath, O_WRONLY | O_CREAT | O_APPEND, 0644);
   if (fd == -1) {
     perror("open");
     exit(EXIT_FAILURE);
@@ -56,9 +60,15 @@ int main(int argc, char *argv[]) {
   /*
   1. Write 10,000 words into tmp.txt.
   */
-  int num = 101;  // TODO: change to 10000
-  char *fileName = "tmp.txt";
-  FILE *wirte = fopen(fileName, "w");
+  printf("Generating random words...\n");
+  #if TEST
+    int num = 150;
+  #else
+    int num = 10000;
+  #endif
+
+  char *tmpTxt = "tmp.txt";
+  FILE *wirte = fopen(tmpTxt, "w");
   if (wirte == NULL) {
     perror("Error:");
     return 1;
@@ -68,17 +78,32 @@ int main(int argc, char *argv[]) {
     char *r = genWord();
     fprintf(wirte, "%s", r);
     if (i != num - 1) fprintf(wirte, "\n");
-    printf("%d Writing: %s into %s\n", i + 1, r, fileName);
+    #if TEST
+      printf("%d Writing: %s into %s\n", i + 1, r, tmpTxt);
+    #endif
     free(r);
   }
 
   fclose(wirte);
 
+  #if TEST
+  printf("==========Test1==========\n");
+  int after = lineCnt(tmpTxt) + 1; // get the line number after write
+  if(num == after){
+      printf("Successfully wrote %d lines into %s.\n", num, tmpTxt);
+  }else{
+      printf("Failed: num = %d, after = %d\n", num, after);
+  }
+  printf("=========================\n");
+  #endif
+
   /*
   2. Read words in tmp.txt and store in queue.
   */
+  printf("Storing words from %s to queue...\n", tmpTxt);
   queue_t *queue = createQ();
-  FILE *readFile = fopen(fileName, "r");
+  FILE *readFile = fopen(tmpTxt, "r");
+  
   if (readFile == NULL) {
     perror("Error:");
     return 1;
@@ -92,11 +117,20 @@ int main(int argc, char *argv[]) {
     process_t *p = createProcess(cnt++, word, 0, 0);
     add2q(queue, p);
   }
-  printQ(queue);
+  
+  #if TEST
+    printQ(queue);
+    printf("==========Test2==========\n");
+    if(qsize(queue) == num){
+        printf("Successfully stored %d lines in queue from %s.\n", num, tmpTxt);
+    }
+    printf("=========================\n");
+  #endif
 
   /*
   3. Encrypt 100 words a time through the subprocess of poolybius cipher.
   */
+  printf("Encrypting words in subprocess...\n");
   int pipefd[2];  // 0 for read, 1 for write
   pid_t pid;
 
@@ -125,10 +159,31 @@ int main(int argc, char *argv[]) {
     }
 
     char buffer[SENTENCE_BUFFER_SIZE];
+    int wordCnt = 0;
     while (read(pipefd[0], buffer, sizeof(buffer)) > 0) {
       printf("Child process received: %s\n", buffer);
+    #if TEST
+      char temp[SENTENCE_BUFFER_SIZE];
+      strncpy(temp, buffer, sizeof(temp));
+      temp[sizeof(temp) - 1] = '\0';  // Ensure null termination
+      char *token = strtok(temp, " ");
+      while (token != NULL) {
+        wordCnt++;                    // Increment the word count
+        token = strtok(NULL, " ");  // Get the next token
+      }
+    #endif
       writeCipherToFile(buffer, table);
     }
+#if TEST
+      printf("==========Test3==========\n");
+        if(wordCnt == num){
+            printf("Successfully encrypted %d words.\n", num);
+        }else{
+            printf("Failed: wordCnt = %d\n", wordCnt);
+        }
+      printf("=========================\n");
+    #endif
+
 
     close(pipefd[0]);
     freeTable(table);
@@ -158,15 +213,7 @@ int main(int argc, char *argv[]) {
     waitpid(pid, NULL, 0);  // Wait for child
   }
 
-  // int after = lineCnt(fileName); // get the line number after write
-  // /*test*/
-  // if(num == after){
-  //     printf("Successfully wrote %d lines into %s.\n", num, fileName);
-  // }else{
-  //     printf("Failed");
-  // }
-
   deleteQ(queue);
   fclose(readFile);
   return 0;
-}
+} 
