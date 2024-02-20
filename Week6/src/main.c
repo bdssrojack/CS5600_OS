@@ -39,8 +39,6 @@ int main(int argc, char* argv[]){
     int cnt = 0;
     while(!feof(readFile)){
         char word[MAXLEN + 1];
-        // if(strcmp(word, "/n")==0)
-        //     break;
         fscanf(readFile, "%s", word);
         printf("Reading: %s\n", word);
         process_t* p = createProcess(cnt++, word, 0, 0);
