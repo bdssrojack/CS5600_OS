@@ -18,17 +18,10 @@
  * Pipe the cipher to a file
  */
 void writeCipherToFile(const char *sentence, table_t *table) {
-  // Create a file name with the current time
-  char fileName[256];
-  time_t now = time(NULL);
-  struct tm *tm = localtime(&now);
-  strftime(fileName, sizeof(fileName), "cipher_%Y%m%d%H%M.txt", tm);
-  printf("Writing to %s\n", fileName);
-
   mkdir("output", 0755);
 
   char filePath[256];
-  snprintf(filePath, sizeof(filePath), "output/%s", fileName);
+  snprintf(filePath, sizeof(filePath), "output/cipher-%d.txt", getpid());
 
   // Open the file for writing
   int fd = open(filePath, O_WRONLY | O_CREAT | O_APPEND, 0644);
@@ -68,7 +61,7 @@ int main(int argc, char *argv[]) {
 #if TEST
   int num = 150;
 #else
-  int num = 10000;
+  int num = 10001;
 #endif
 
   char *tmpTxt = "tmp.txt";
@@ -205,7 +198,7 @@ int main(int argc, char *argv[]) {
       ssize_t bytes_written =
           write(pipefd[batch_idx][1], sentence, strlen(sentence) + 1);
       close(pipefd[batch_idx][1]);
-      sleep(1);
+      // sleep(1);
       sentence[0] = '\0';
       batch_idx++;
     }
