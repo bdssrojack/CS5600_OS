@@ -1,4 +1,4 @@
 all: queue
 
-queue: *.c *.h
-	gcc *.c *.h -g -o qtest
+queue: *.c
+	gcc *.c -g -o qtest

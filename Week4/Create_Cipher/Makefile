@@ -1,4 +1,4 @@
 all:cipher
 
-cipher: *.c *.h
-	gcc *.c *.h -g -o cipher
+cipher: *.c
+	gcc *.c -g -o cipher
