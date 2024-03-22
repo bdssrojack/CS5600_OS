@@ -51,6 +51,9 @@
         "ostream": "cpp",
         "stdexcept": "cpp",
         "streambuf": "cpp",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "cache.h": "c",
+        "message.h": "c",
+        "string.h": "c"
     }
 }
