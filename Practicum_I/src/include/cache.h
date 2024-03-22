@@ -50,7 +50,7 @@ and hash table is way too more complicated to implement for this simple cache sy
 cache_t* get_cache_instance();
 
 /**
- * @brief Free the cache instance object
+ * @brief Free the cache instance object and message objects in the cache
  * 
  */
 void free_cache();

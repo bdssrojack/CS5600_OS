@@ -121,8 +121,6 @@ bool store_msg(const message_t *msg) {
             msg->receiver, msg->content, msg->delivered);
     fclose(file);
 
-    // TODO: whether to free the message here or not
-
     // add the message to the cache
     add_to_cache((message_t *)msg);
 
@@ -207,13 +205,13 @@ message_t *retrieve_msg(const int id) {
 
     fclose(file);
 
-    // add the message to the cache
-    add_to_cache(msg);
-
     printf(
         "Message retrieved from store: id=%d, sender=%s, receiver=%s, "
         "content=%s\n",
         msg->id, msg->sender, msg->receiver, msg->content);
+
+    // add the message to the cache
+    add_to_cache(msg);
 
     return msg;
 }
