@@ -225,6 +225,21 @@ void rmRespond(int client_sock) {
     }
     printf("File path received: %s\n", file_path);
 
+    // Check permission of the file
+    struct stat file_stat;
+    if (stat(file_path, &file_stat) < 0) {
+        printf("Couldn't get file stat\n");
+        return;
+    }
+    if (file_stat.st_mode & READ_ONLY == 0) {
+        printf("Permission denied\n");
+        if (send(client_sock, &server_failed, sizeof(server_failed), 0) < 0) {
+            printf("Unable to send remove status\n");
+            return;
+        }
+        return;
+    }
+
     // 5. Send remove status to client
     if (remove(file_path) < 0) {
         printf("Couldn't remove file\n");
