@@ -60,6 +60,10 @@ void writeRequest(command_t* cmd) {
 
         int file_size = 0;
         FILE* local_file = fopen(cmd->file_path_1, "r");
+        if (local_file == NULL) {
+            printf("Unable to open local file\n");
+            close_socket();
+        }
         fseek(local_file, 0, SEEK_END);
         file_size = ftell(local_file);
         rewind(local_file);
@@ -247,6 +251,13 @@ void rmRequest(command_t* cmd) {
         close_socket();
     }
 
+    int server_ready = -1;
+    if (recv(socket_desc, &server_ready, sizeof(server_ready), 0) < 0) {
+        printf("Error while receiving server's msg\n");
+        close_socket();
+    }
+    printf("Server is ready for remove\n");
+
     // 3. Send file path to server:
     if (send(socket_desc, cmd->file_path_1, strlen(cmd->file_path_1), 0) < 0) {
         printf("Unable to send file path\n");
@@ -254,13 +265,13 @@ void rmRequest(command_t* cmd) {
     }
 
     // 6. Server response: operation status
-    int server_ready = -1;
+    server_ready = -1;
     if (recv(socket_desc, &server_ready, sizeof(server_ready), 0) < 0) {
         printf("Error while receiving server's msg\n");
         close_socket();
     }
 
-    if(server_ready) {
+    if(server_ready == 1) {
         printf("Remove operation successful\n");
     } else {
         printf("Remove operation failed\n");

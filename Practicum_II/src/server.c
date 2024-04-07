@@ -20,7 +20,7 @@
 #include "command.h"
 
 int socket_desc;
-int server_ready = 1, server_failed = -1;
+const int server_ready = 1, server_failed = -1;
 
 /**
  * @brief Signal handler for closing the socket
@@ -279,6 +279,7 @@ void* client_handler(void* socket_desc) {
 int main(void) {
     // Register signal handler
     signal(SIGINT, close_socket);  // Ctrl + C
+    signal(SIGPIPE, SIG_IGN);      // Ignore SIGPIPE
 
     socklen_t client_size;
     struct sockaddr_in server_addr, client_addr;
