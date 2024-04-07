@@ -76,16 +76,41 @@ void writeRequest(command_t* cmd) {
     }
     printf("Remote file path and size sent to server\n");
 
+    // permission setting for the remote file
+    int need_permission_setting = -1;
+    if (recv(socket_desc, &need_permission_setting, sizeof(need_permission_setting), 0) < 0) {
+        printf("Error while receiving server's msg\n");
+        close_socket();
+    }
+
+    if (need_permission_setting == 1){
+        // set permission
+        printf("Setting permission for remote file: 0-read_only, 1-read_write\n");
+        int permission = -1;
+        scanf("%d", &permission);
+        if (permission) {
+            permission = READ_WRITE;
+        } else {
+            permission = READ_ONLY;
+        }
+        if (send(socket_desc, &permission, sizeof(permission), 0) < 0) {
+            printf("Unable to send permission\n");
+            close_socket();
+        }
+    }
+    // else: file exists, no need to set permission
+
+
     // 4. Server response: file descriptor ready
     server_ready = -1;
     if (recv(socket_desc, &server_ready, sizeof(server_ready), 0) < 0) {
         printf("Error while receiving server's msg\n");
         close_socket();
     }
-    printf("File descriptor is ready in Server\n");
-
+    
     // 5. Send local data stream to server:
-    if (server_ready) {
+    if (server_ready == 1) {
+        printf("File descriptor is ready in Server\n");
         FILE* local_file = fopen(cmd->file_path_1, "r");
         if (local_file == NULL) {
             printf("Unable to open local file\n");
@@ -103,6 +128,10 @@ void writeRequest(command_t* cmd) {
         }
 
         fclose(local_file);
+    } else if (server_ready == PERMISSION_DENIED) {
+        // permission denied
+        printf("Permission denied\n");
+        close_socket();
     } else {
         printf("Server is not ready for write\n");
         close_socket();

@@ -6,6 +6,7 @@
  */
 
 #include <arpa/inet.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
@@ -59,10 +60,45 @@ void writeRespond(int client_sock) {
     }
     printf("File size received: %d\n", file_size);
 
+    // ask for permission setting from client if the file doesn't exist
+    int permission;
+    if (access(file_path, F_OK) < 0) {
+        // file doesn't exist
+        if (send(client_sock, &server_ready, sizeof(server_ready), 0) < 0) {
+            printf("Unable to send permission setting\n");
+            return;
+        }
+        if (recv(client_sock, &permission, sizeof(permission), 0) < 0) {
+            printf("Couldn't receive permission setting\n");
+            return;
+        }
+        printf("Permission setting received: %d\n", permission);
+    } else {
+        // file exists
+        if (send(client_sock, &server_failed, sizeof(server_failed), 0) < 0) {
+            printf("Unable to send permission setting\n");
+            return;
+        }
+    }
+
     // 3. Set up file descriptor and response ready to client
-    int fd = open(file_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int fd = open(file_path, O_WRONLY | O_CREAT | O_TRUNC, permission);
     if (fd < 0) {
-        printf("Couldn't open file\n");
+        if (errno == EACCES) {
+            int permission_denied = PERMISSION_DENIED;
+            if (send(client_sock, &permission_denied, sizeof(permission_denied),
+                     0) < 0) {
+                printf("Unable to send permission denied\n");
+                return;
+            }
+            printf("Couldn't open file: Permission denied\n");
+        } else {
+            if (send(client_sock, &server_failed, sizeof(server_failed), 0) < 0) {
+                printf("Unable to send failed in write mode\n");
+                return;
+            }
+            printf("Couldn't open file\n");
+        }
         return;
     }
 
@@ -314,7 +350,6 @@ int main(void) {
             free(client_sock_ptr);
             continue;
         }
-
     }
 
     return 0;
