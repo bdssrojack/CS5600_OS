@@ -207,10 +207,36 @@ void getRequest(command_t* cmd) {
 
 /**
  * @brief Send remove request to server
+ * Command format: ./rfs RM <file_path>
  *
  * @param cmd
  */
-void rmRequest(command_t* cmd) {}
+void rmRequest(command_t* cmd) {
+    // 1. Send operation type to server:
+    if (send(socket_desc, &cmd->op, sizeof(operation_t), 0) < 0) {
+        printf("Unable to send operation type.\n");
+        close_socket();
+    }
+
+    // 3. Send file path to server:
+    if (send(socket_desc, cmd->file_path_1, strlen(cmd->file_path_1), 0) < 0) {
+        printf("Unable to send file path\n");
+        close_socket();
+    }
+
+    // 6. Server response: operation status
+    int server_ready = -1;
+    if (recv(socket_desc, &server_ready, sizeof(server_ready), 0) < 0) {
+        printf("Error while receiving server's msg\n");
+        close_socket();
+    }
+
+    if(server_ready) {
+        printf("Remove operation successful\n");
+    } else {
+        printf("Remove operation failed\n");
+    }
+}
 
 /**
  * @brief parse command line arguments that client receives

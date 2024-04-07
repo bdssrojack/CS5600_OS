@@ -37,14 +37,12 @@ void close_socket_err() {
  * @brief Server's respond function for write operation
  */
 void writeRespond() {
-    printf("Client's operation received. Server is in WRITE mode\n");
-
     // 1. Send ready in write mode to client
     if (send(client_sock, &server_ready, sizeof(server_ready), 0) < 0) {
         printf("Unable to send ready in write mode\n");
         return;
     }
-    printf("Write mode flag sent to client\n");
+    printf("Client's operation received. Server is in WRITE mode\n");
 
     // 2. Receive file path and size from client
     char file_path[FILE_PATH_LEN];
@@ -107,13 +105,12 @@ void writeRespond() {
  * @brief Server's respond function for get operation
  */
 void getRespond() {
-    printf("Client's operation received. Server is in GET mode\n");
-
     // 2. Send ready in get mode to client
     if (send(client_sock, &server_ready, sizeof(server_ready), 0) < 0) {
         printf("Unable to send ready in get mode\n");
         return;
     }
+    printf("Client's operation received. Server is in GET mode\n");
 
     // 4. Receive file path from client, found the file in server
     char file_path[FILE_PATH_LEN];
@@ -162,7 +159,40 @@ void getRespond() {
 /**
  * @brief Server's respond function for rm operation
  */
-void rmRespond() {}
+void rmRespond() {
+    // 2. Send ready in remove mode to client
+    if (send(client_sock, &server_ready, sizeof(server_ready), 0) < 0) {
+        printf("Unable to send ready in remove mode\n");
+        return;
+    }
+    printf("Client's operation received. Server is in RM mode\n");
+
+    // 4. Receive file path from client, remove the file in server
+    char file_path[FILE_PATH_LEN];
+    memset(file_path, 0, sizeof(file_path));
+    if (recv(client_sock, file_path, sizeof(file_path), 0) < 0) {
+        printf("Couldn't receive file path\n");
+        return;
+    }
+    printf("File path received: %s\n", file_path);
+    
+    // 5. Send remove status to client
+    if (remove(file_path) < 0) {
+        printf("Couldn't remove file\n");
+        if (send(client_sock, &server_failed, sizeof(server_failed), 0) < 0) {
+            printf("Unable to send remove status\n");
+            return;
+        }
+        return;
+    } else {
+        printf("File removed\n");
+        if (send(client_sock, &server_ready, sizeof(server_ready), 0) < 0) {
+            printf("Unable to send remove status\n");
+            return;
+        }
+    }
+    
+}
 
 int main(void) {
     // Register signal handler
