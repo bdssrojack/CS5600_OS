@@ -7,36 +7,36 @@
 
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include "command.h"
 
-int socket_desc, client_sock;
+int socket_desc;
 int server_ready = 1, server_failed = -1;
 
+/**
+ * @brief Signal handler for closing the socket
+ *
+ * @param sig signal number
+ */
 void close_socket(int sig) {
     close(socket_desc);
-    close(client_sock);
+    // close(client_sock);
     printf("\nClosing the socket\n");
     exit(0);
-}
-
-void close_socket_err() {
-    close(socket_desc);
-    close(client_sock);
-    printf("\nError occurs, closing the socket\n");
-    exit(1);
 }
 
 /**
  * @brief Server's respond function for write operation
  */
-void writeRespond() {
+void writeRespond(int client_sock) {
     // 1. Send ready in write mode to client
     if (send(client_sock, &server_ready, sizeof(server_ready), 0) < 0) {
         printf("Unable to send ready in write mode\n");
@@ -60,14 +60,20 @@ void writeRespond() {
     printf("File size received: %d\n", file_size);
 
     // 3. Set up file descriptor and response ready to client
-    int file_desc = open(file_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (file_desc < 0) {
+    int fd = open(file_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
         printf("Couldn't open file\n");
         return;
     }
 
     if (send(client_sock, &server_ready, sizeof(server_ready), 0) < 0) {
         printf("Unable to send ready in write mode\n");
+        return;
+    }
+
+    // lock the fd
+    if (flock(fd, LOCK_EX) < 0) {
+        printf("Couldn't lock file descriptor\n");
         return;
     }
 
@@ -83,7 +89,7 @@ void writeRespond() {
             printf("Couldn't receive data stream\n");
             return;
         }
-        if (write(file_desc, buffer, read_size) < 0) {
+        if (write(fd, buffer, read_size) < 0) {
             printf("Couldn't write to file\n");
             return;
         }
@@ -93,18 +99,25 @@ void writeRespond() {
     printf("Data stream written to file\n");
 
     // 5. Send write status and close file descriptor
-    close(file_desc);
     if (send(client_sock, &server_ready, sizeof(server_ready), 0) < 0) {
         printf("Unable to send write status\n");
         return;
     }
     printf("File written successfully\n");
+
+    // unlock the fd
+    if (flock(fd, LOCK_UN) < 0) {
+        printf("Couldn't unlock file descriptor\n");
+        return;
+    }
+
+    close(fd);
 }
 
 /**
  * @brief Server's respond function for get operation
  */
-void getRespond() {
+void getRespond(int client_sock) {
     // 2. Send ready in get mode to client
     if (send(client_sock, &server_ready, sizeof(server_ready), 0) < 0) {
         printf("Unable to send ready in get mode\n");
@@ -159,7 +172,7 @@ void getRespond() {
 /**
  * @brief Server's respond function for rm operation
  */
-void rmRespond() {
+void rmRespond(int client_sock) {
     // 2. Send ready in remove mode to client
     if (send(client_sock, &server_ready, sizeof(server_ready), 0) < 0) {
         printf("Unable to send ready in remove mode\n");
@@ -175,7 +188,7 @@ void rmRespond() {
         return;
     }
     printf("File path received: %s\n", file_path);
-    
+
     // 5. Send remove status to client
     if (remove(file_path) < 0) {
         printf("Couldn't remove file\n");
@@ -191,7 +204,40 @@ void rmRespond() {
             return;
         }
     }
-    
+}
+
+void* client_handler(void* socket_desc) {
+    int client_sock = *(int*)socket_desc;
+    free(socket_desc);
+    printf("New thread running for client %d\n", client_sock);
+
+    // Receive the operation of client's command:
+    operation_t op;
+    if (recv(client_sock, &op, sizeof(operation_t), 0) < 0) {
+        printf("Couldn't receive\n");
+        close(client_sock);
+        return NULL;
+    }
+
+    switch (op) {
+        case WRITE:
+            writeRespond(client_sock);
+            break;
+        case GET:
+            getRespond(client_sock);
+            break;
+        case RM:
+            rmRespond(client_sock);
+            break;
+
+        default:
+            break;
+    }
+
+    // Closing the client socket:
+    close(client_sock);
+
+    return NULL;
 }
 
 int main(void) {
@@ -242,44 +288,33 @@ int main(void) {
     printf("\nListening for incoming connections.....\n");
 
     while (1) {
+        printf("=====================================\n");
         // Accept an incoming connection:
         client_size = sizeof(client_addr);
-        client_sock =
+        int* client_sock_ptr = malloc(sizeof(int));
+        *client_sock_ptr =
             accept(socket_desc, (struct sockaddr*)&client_addr, &client_size);
 
-        if (client_sock < 0) {
-            printf("Can't accept\n");
+        if (*client_sock_ptr < 0) {
+            printf("Can't accept, exit\n");
             close(socket_desc);
-            close(client_sock);
+            close(*client_sock_ptr);
+            free(client_sock_ptr);
             return -1;
         }
+
         printf("Client connected at IP: %s and port: %i\n",
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
-        // Receive the operation of client's command:
-        operation_t op;
-        if (recv(client_sock, &op, sizeof(operation_t), 0) < 0) {
-            printf("Couldn't receive\n");
-            close_socket_err();
+        // Create a new thread for the client
+        pthread_t thread_id;
+        if (pthread_create(&thread_id, NULL, client_handler,
+                           (void*)client_sock_ptr) < 0) {
+            printf("Could not create thread\n");
+            free(client_sock_ptr);
+            continue;
         }
 
-        switch (op) {
-            case WRITE:
-                writeRespond();
-                break;
-            case GET:
-                getRespond();
-                break;
-            case RM:
-                rmRespond();
-                break;
-
-            default:
-                break;
-        }
-
-        // Closing the client socket:
-        close(client_sock);
     }
 
     return 0;
