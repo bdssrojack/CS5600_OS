@@ -6,17 +6,18 @@
  */
 
 #include <arpa/inet.h>
-#include <stdlib.h>
+#include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <signal.h>
-#include <fcntl.h>
 
 #include "command.h"
 
 int socket_desc, client_sock;
+int server_ready = 1, server_failed = -1;
 
 void close_socket(int sig) {
     close(socket_desc);
@@ -25,7 +26,7 @@ void close_socket(int sig) {
     exit(0);
 }
 
-void close_socket_err(){
+void close_socket_err() {
     close(socket_desc);
     close(client_sock);
     printf("\nError occurs, closing the socket\n");
@@ -34,11 +35,9 @@ void close_socket_err(){
 
 /**
  * @brief Server's respond function for write operation
- * 
  */
 void writeRespond() {
-    printf("Client's operation received. Server is in write mode\n");
-    int server_ready = 1, server_failed = 0;
+    printf("Client's operation received. Server is in WRITE mode\n");
 
     // 1. Send ready in write mode to client
     if (send(client_sock, &server_ready, sizeof(server_ready), 0) < 0) {
@@ -49,6 +48,7 @@ void writeRespond() {
 
     // 2. Receive file path and size from client
     char file_path[FILE_PATH_LEN];
+    memset(file_path, 0, sizeof(file_path));
     if (recv(client_sock, file_path, sizeof(file_path), 0) < 0) {
         printf("Couldn't receive file path\n");
         return;
@@ -79,7 +79,7 @@ void writeRespond() {
     char buffer[8196];
     int read_size;
     int total_size = 0;
-    while(total_size < file_size) {
+    while (total_size < file_size) {
         read_size = recv(client_sock, buffer, sizeof(buffer), 0);
         if (read_size < 0) {
             printf("Couldn't receive data stream\n");
@@ -105,31 +105,71 @@ void writeRespond() {
 
 /**
  * @brief Server's respond function for get operation
- * 
  */
 void getRespond() {
+    printf("Client's operation received. Server is in GET mode\n");
 
+    // 2. Send ready in get mode to client
+    if (send(client_sock, &server_ready, sizeof(server_ready), 0) < 0) {
+        printf("Unable to send ready in get mode\n");
+        return;
+    }
+
+    // 4. Receive file path from client, found the file in server
+    char file_path[FILE_PATH_LEN];
+    memset(file_path, 0, sizeof(file_path));
+    if (recv(client_sock, file_path, sizeof(file_path), 0) < 0) {
+        printf("Couldn't receive file path\n");
+        return;
+    }
+    printf("File path received: %s\n", file_path);
+
+    // 5. If not found, send failed to client and return
+    // If found, send file size and file data to client
+    FILE* file = fopen(file_path, "r");
+    if (file == NULL) {
+        printf("File not found\n");
+        if (send(client_sock, &server_failed, sizeof(server_failed), 0) < 0) {
+            printf("Unable to send failed to client\n");
+            return;
+        }
+        return;
+    } else {
+        printf("File found\n");
+        int file_size = 0;
+        fseek(file, 0, SEEK_END);
+        file_size = ftell(file);
+        rewind(file);
+        if (send(client_sock, &file_size, sizeof(file_size), 0) < 0) {
+            printf("Unable to send file size in get mode\n");
+            return;
+        }
+
+        char buffer[1024];
+        int read_size = 0;
+        while ((read_size = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+            if (send(client_sock, buffer, read_size, 0) < 0) {
+                printf("Unable to send file data in get mode\n");
+                return;
+            }
+        }
+
+        fclose(file);
+        printf("File data sent to client\n");
+    }
 }
 
 /**
  * @brief Server's respond function for rm operation
- * 
  */
-void rmRespond() {
-
-}
+void rmRespond() {}
 
 int main(void) {
     // Register signal handler
-    signal(SIGINT, close_socket); // Ctrl + C
+    signal(SIGINT, close_socket);  // Ctrl + C
 
     socklen_t client_size;
     struct sockaddr_in server_addr, client_addr;
-    // char server_message[8196], client_message[8196];
-
-    // // Clean buffers:
-    // memset(server_message, '\0', sizeof(server_message));
-    // memset(client_message, '\0', sizeof(client_message));
 
     // Create socket:
     socket_desc = socket(AF_INET, SOCK_STREAM, 0);
@@ -139,6 +179,16 @@ int main(void) {
         return -1;
     }
     printf("Socket created successfully\n");
+
+    // Set SO_REUSEADDR option for immediately rebinding the port after last
+    // closing:
+    int opt = 1;
+    if (setsockopt(socket_desc, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) <
+        0) {
+        printf("Error setting SO_REUSEADDR option\n");
+        close(socket_desc);
+        return -1;
+    }
 
     // Set port and IP:
     server_addr.sin_family = AF_INET;
@@ -176,25 +226,6 @@ int main(void) {
         printf("Client connected at IP: %s and port: %i\n",
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
-        // // Receive client's message:
-        // if (recv(client_sock, client_message, sizeof(client_message), 0) < 0) {
-        //     printf("Couldn't receive\n");
-        //     close(socket_desc);
-        //     close(client_sock);
-        //     return -1;
-        // }
-        // printf("Msg from client: %s\n", client_message);
-
-        // // Respond to client:
-        // strcpy(server_message, "This is the server's response message.");
-
-        // if (send(client_sock, server_message, strlen(server_message), 0) < 0) {
-        //     printf("Can't send\n");
-        //     close(socket_desc);
-        //     close(client_sock);
-        //     return -1;
-        // }
-
         // Receive the operation of client's command:
         operation_t op;
         if (recv(client_sock, &op, sizeof(operation_t), 0) < 0) {
@@ -203,18 +234,18 @@ int main(void) {
         }
 
         switch (op) {
-        case WRITE:
-            writeRespond();
-            break;
-        case GET:
-            getRespond();
-            break;
-        case RM:
-            rmRespond();
-            break;
-        
-        default:
-            break;
+            case WRITE:
+                writeRespond();
+                break;
+            case GET:
+                getRespond();
+                break;
+            case RM:
+                rmRespond();
+                break;
+
+            default:
+                break;
         }
 
         // Closing the client socket:

@@ -49,17 +49,17 @@ void writeRequest(command_t* cmd) {
     if (server_ready) {
         // If the remote file or path is omitted, use the values for the first
         // argument.
-        if (strlen(cmd->remote_file_path) == 0) {
-            strcpy(cmd->remote_file_path, cmd->local_file_path);
+        if (strlen(cmd->file_path_2) == 0) {
+            strcpy(cmd->file_path_2, cmd->file_path_1);
         }
-        if (send(socket_desc, cmd->remote_file_path,
-                 strlen(cmd->remote_file_path), 0) < 0) {
+        if (send(socket_desc, cmd->file_path_2, strlen(cmd->file_path_2), 0) <
+            0) {
             printf("Unable to send remote file path\n");
             close_socket();
         }
 
         int file_size = 0;
-        FILE* local_file = fopen(cmd->local_file_path, "r");
+        FILE* local_file = fopen(cmd->file_path_1, "r");
         fseek(local_file, 0, SEEK_END);
         file_size = ftell(local_file);
         rewind(local_file);
@@ -86,7 +86,7 @@ void writeRequest(command_t* cmd) {
 
     // 5. Send local data stream to server:
     if (server_ready) {
-        FILE* local_file = fopen(cmd->local_file_path, "r");
+        FILE* local_file = fopen(cmd->file_path_1, "r");
         if (local_file == NULL) {
             printf("Unable to open local file\n");
             close_socket();
@@ -125,10 +125,85 @@ void writeRequest(command_t* cmd) {
 
 /**
  * @brief Send get request to server
+ * 
+ * Command format: ./rfs GET <remote_file_path> [local_file_path]
  *
  * @param cmd
  */
-void getRequest(command_t* cmd) {}
+void getRequest(command_t* cmd) {
+    int server_ready = -1;
+
+    // 1. Send operation type to server:
+    if (send(socket_desc, &cmd->op, sizeof(operation_t), 0) < 0) {
+        printf("Unable to send operation type.\n");
+        close_socket();
+    }
+
+    // 3. Server response: into get mode
+    // Send remote file path to server:
+    if (recv(socket_desc, &server_ready, sizeof(server_ready), 0) < 0) {
+        printf("Error while receiving server's msg\n");
+        close_socket();
+    }
+
+    if(server_ready) {
+        printf("remote file path: %s\n", cmd->file_path_1);
+        if (send(socket_desc, cmd->file_path_1, strlen(cmd->file_path_1), 0) < 0) {
+            printf("Unable to send remote file path\n");
+            close_socket();
+        }
+    } else {
+        printf("Server is not ready for GET\n");
+        close_socket();
+    }
+
+    // 6. Server response: file search failed (-1) or file size (>=0)
+    // If failed, return; if succeeded, prepare local file descriptor and receive data stream from server
+
+    int file_size;
+    if (recv(socket_desc, &file_size, sizeof(file_size), 0) < 0) {
+        printf("Error while receiving file size\n");
+        close_socket();
+    }    
+
+    if (file_size < 0) {
+        printf("File not found in server\n");
+        close_socket();
+    } else {
+        // if the local file path is omitted, use the current file path
+        if (strlen(cmd->file_path_2) == 0) {
+            // TODO: get the remote file name
+            strcpy(cmd->file_path_2, cmd->file_path_1);
+            printf("local file path: %s\n", cmd->file_path_2);
+        }
+
+        FILE* local_file = fopen(cmd->file_path_2, "w");
+        if (local_file == NULL) {
+            printf("Unable to open local file\n");
+            close_socket();
+        }
+
+        char buffer[8196];
+        int read_size;
+        int total_size = 0;
+        while (total_size < file_size) {
+            read_size = recv(socket_desc, buffer, sizeof(buffer), 0);
+            if (read_size < 0) {
+                printf("Couldn't receive data stream\n");
+                close_socket();
+            }
+            if (fwrite(buffer, 1, read_size, local_file) < 0) {
+                printf("Couldn't write to file\n");
+                close_socket();
+            }
+            total_size += read_size;
+        }
+
+        printf("Data stream written to file\n");
+        fclose(local_file);
+    }
+
+}
 
 /**
  * @brief Send remove request to server
@@ -147,8 +222,10 @@ void rmRequest(command_t* cmd) {}
 command_t* parseCommand(int argc, char* argv[]) {
     if (argc > 4 || argc < 3) {
         perror("Invalid number of arguments\n");
-        printf("Usage: %s <operation> <local_file_path> [remote_file_path]\n",
-               argv[0]);
+        printf(
+            "Usage: ./rfs WRITE <local_file_path> [remote_file_path]\n or "
+            "./rfs GET <remote_file_path> <local_file_path>\n or ./rfs RM "
+            "<file_path>\n");
         exit(1);
     }
 
@@ -166,17 +243,16 @@ command_t* parseCommand(int argc, char* argv[]) {
         close_socket();
     }
 
-    strncpy(cmd->local_file_path, argv[2], FILE_PATH_LEN - 1);
-    cmd->local_file_path[FILE_PATH_LEN - 1] = '\0';  // Ensure null termination
-    strcpy(cmd->local_file_path, argv[2]);
+    strncpy(cmd->file_path_1, argv[2], FILE_PATH_LEN - 1);
+    cmd->file_path_1[FILE_PATH_LEN - 1] = '\0';  // Ensure null termination
+    strcpy(cmd->file_path_1, argv[2]);
 
     if (argc == 4) {
-        strncpy(cmd->remote_file_path, argv[3], FILE_PATH_LEN - 1);
-        cmd->remote_file_path[FILE_PATH_LEN - 1] =
-            '\0';  // Ensure null termination
+        strncpy(cmd->file_path_2, argv[3], FILE_PATH_LEN - 1);
+        cmd->file_path_2[FILE_PATH_LEN - 1] = '\0';  // Ensure null termination
         // strcpy(cmd->remote_file_path, argv[3]);
     } else {
-        cmd->remote_file_path[0] =
+        cmd->file_path_2[0] =
             '\0';  // No remote file path provided, set to empty string
     }
 
